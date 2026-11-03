@@ -66,12 +66,21 @@ function paintHead(root, headBone) {
     const ids = new Set(o.skeleton.bones.map((b, i) => family.has(b) ? i : -1).filter(i => i >= 0));
     const col = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) { let w = 0; for (let k = 0; k < 4; k++) if (ids.has(si.getComponent(i, k))) w += sw.getComponent(i, k); col[i * 3] = w > 0.5 ? 1 : 0; }
-    o.geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    // kept aside and swapped in only while measuring: the model may have vertex colours of its own
+    o.userData.rigcheckMask = new THREE.BufferAttribute(col, 3);
+    o.userData.rigcheckColor = o.geometry.getAttribute('color') || null;
   });
 }
 const MASK_VIEWS = [[0, 0.1], [Math.PI / 2, 0.1], [Math.PI, 0.1], [-Math.PI / 2, 0.1], [0.3, 1.2], [0, -0.6]];
 function headShare(root) {
   const bg = scene.background, env = scene.environment;
+  const swap = mask => root.traverse(o => {
+    if (!o.isSkinnedMesh || !o.userData.rigcheckMask) return;
+    if (mask) o.geometry.setAttribute('color', o.userData.rigcheckMask);
+    else if (o.userData.rigcheckColor) o.geometry.setAttribute('color', o.userData.rigcheckColor);
+    else o.geometry.deleteAttribute('color');
+  });
+  swap(true);
   scene.background = new THREE.Color(0x0000ff); scene.environment = null; scene.overrideMaterial = maskMat;
   let best = 0;
   for (const [yaw, pitch] of MASK_VIEWS) {
@@ -84,6 +93,7 @@ function headShare(root) {
   }
   renderer.setRenderTarget(null);
   scene.background = bg; scene.environment = env; scene.overrideMaterial = null;
+  swap(false);
   return best;
 }
 
