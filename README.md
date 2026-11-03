@@ -20,6 +20,7 @@ Every number is a measurement, not a guess:
 |---|---|---|
 | **Mesh tearing / smearing** | every triangle edge, every sampled frame, against the bind pose; share of edges stretched past 3x and 5x | broken skin weights, bad retargets, heads smeared into flaps |
 | **Nothing attached** | total skin weight on the head, hands and feet bones (and their children) | body parts left out on export, or parented to a bone without skinning |
+| **Head buried in the body** | head vertices painted red, rendered from 6 sides; head's share of the pixels vs the rest pose | heads swallowed by shoulder or chest skin even when the bones look fine |
 | **Head below the shoulders** | head joint vs shoulder line, upright clips only | necks folding into the chest |
 | **Neck bend** | angle between chest→neck and neck→head | heads snapped forward or back |
 | **Bone length** | distance to the parent bone vs rest | retargets that scale bones |
@@ -66,8 +67,10 @@ seeing your notes, so it doesn't share your blind spots. Copy the `skill` folder
 - Knee and elbow direction checks are not in yet (rigs disagree about which way is forward).
 - "Matches the source" only judges spine and neck for now: on clips with big root motion (falls, stand-ups) limb
   directions disagree with the source on every model alike, which points at the comparison, not the models.
-- The numbers can't tell "head hidden face-down in a deep hunch" from "head missing"; the top-down close-up and the
-  reviewer agent can, and the reviewer can over-call it too. Use both and check one against the other.
+- Bones matching the source doesn't mean the mesh looks right: skin can swallow a head while every bone is in place.
+  That's why rigcheck also renders (head visibility) and why the reviewer agent exists. In our own test the numbers
+  missed buried heads the reviewer saw, and the reviewer called a head "missing" that the renders showed was hanging
+  face-down under the shoulders, visible only from below. Use both and check one against the other.
 - The close-ups need WebGL, so headless browsers without a GPU produce blank images; the numbers still work.
 
 ## Licence

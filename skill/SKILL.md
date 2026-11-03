@@ -32,8 +32,9 @@ seen your notes or the numbers, and give it only:
 
 ## 3. Report
 
-Before reporting a reviewer finding, check it against the numbers: e.g. "head missing" with a normal head-to-chest
-distance and low source drift usually means the head hangs face-down out of view (a readability issue, not a broken rig);
-look at the top-down shot. Merge the numbers and the reviewer's findings into one list, most severe first, each with the close-up file and how to
+Before reporting a reviewer finding, check it against the numbers, and the other way round: e.g. for "head missing",
+look at `headVisible` in report.json (the head's visible share from the best of six angles vs the rest pose). Near zero
+means the head is buried in the body; a fair share means it is only hidden from these camera angles (still a readability
+problem for a game camera, but not a broken mesh). Merge the numbers and the reviewer's findings into one list, most severe first, each with the close-up file and how to
 reproduce (model + clip + time from report.json). Do not call a character fine because the numbers passed if the
 reviewer saw a problem, or the other way round: say which source found what.

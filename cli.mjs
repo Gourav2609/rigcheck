@@ -170,7 +170,7 @@ function writeReport(data, dir) {
       clipsOut.push({ ...c, shots: { time: s?.time, front, side, top } });
       html += `<tr><td><code>${esc(c.clip)}</code><div class="muted">${c.duration}s · shot at ${s?.time ?? '-'}s</div></td><td class="${c.status}">${c.status}</td>
         <td>${c.flags.map(f => `<div class="${f.level}">${esc(f.msg)} <span class="muted">@${f.time}s</span></div>`).join('') || '<span class="muted">-</span>'}</td>
-        <td>${c.maxStretch}x max<br><span class="muted">${c.worstBadPct}% edges</span>${c.fidelity ? `<br><span class="muted">${c.fidelity.skipped ? 'source check skipped (floor move)' : `source drift ${c.fidelity.spineDrift}° spine, ${c.fidelity.maxDrift}° max`}</span>` : ''}</td>
+        <td>${c.maxStretch}x max<br><span class="muted">${c.worstBadPct}% edges</span>${c.fidelity ? `<br><span class="muted">${c.fidelity.skipped ? 'source check skipped (floor move)' : `source drift ${c.fidelity.spineDrift}° spine, ${c.fidelity.maxDrift}° max`}</span>` : ''}${c.headVisible != null ? `<br><span class="muted">head visible ${Math.round(c.headVisible * 100)}%</span>` : ''}</td>
         <td>${front ? `<img src="${front}">` : ''}</td><td>${side ? `<img src="${side}">` : ''}</td><td>${top ? `<img src="${top}">` : ''}</td></tr>`;
     }
     html += `</table>`;

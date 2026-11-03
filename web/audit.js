@@ -52,6 +52,41 @@ function shot(root, yaw, pitch) {
 }
 const VIEWS = { front: 0, side: Math.PI / 2, back: Math.PI, three_quarter: Math.PI / 4 };
 
+// Head visibility: paint the head's vertices red and the rest black, render from several sides, and measure the head's
+// share of the drawn pixels. A head swallowed by the shoulders or chest skin vanishes from every side even when the
+// bones are fine, which no bone measurement can see.
+const maskMat = new THREE.MeshBasicMaterial({ vertexColors: true });
+const maskTarget = new THREE.WebGLRenderTarget(128, 128);
+const maskPixels = new Uint8Array(128 * 128 * 4);
+function paintHead(root, headBone) {
+  const family = new Set(); headBone.traverse(b => b.isBone && family.add(b));
+  root.traverse(o => {
+    if (!o.isSkinnedMesh) return;
+    const si = o.geometry.attributes.skinIndex, sw = o.geometry.attributes.skinWeight, n = si.count;
+    const ids = new Set(o.skeleton.bones.map((b, i) => family.has(b) ? i : -1).filter(i => i >= 0));
+    const col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { let w = 0; for (let k = 0; k < 4; k++) if (ids.has(si.getComponent(i, k))) w += sw.getComponent(i, k); col[i * 3] = w > 0.5 ? 1 : 0; }
+    o.geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  });
+}
+const MASK_VIEWS = [[0, 0.1], [Math.PI / 2, 0.1], [Math.PI, 0.1], [-Math.PI / 2, 0.1], [0.3, 1.2], [0, -0.6]];
+function headShare(root) {
+  const bg = scene.background, env = scene.environment;
+  scene.background = new THREE.Color(0x0000ff); scene.environment = null; scene.overrideMaterial = maskMat;
+  let best = 0;
+  for (const [yaw, pitch] of MASK_VIEWS) {
+    root.updateMatrixWorld(true); fit(root, yaw, pitch);
+    renderer.setRenderTarget(maskTarget); renderer.render(scene, camera);
+    renderer.readRenderTargetPixels(maskTarget, 0, 0, 128, 128, maskPixels);
+    let head = 0, body = 0;
+    for (let i = 0; i < maskPixels.length; i += 4) { if (maskPixels[i + 2] > 128 && maskPixels[i] < 100) continue; body++; if (maskPixels[i] > 128) head++; }
+    if (body) best = Math.max(best, head / body);
+  }
+  renderer.setRenderTarget(null);
+  scene.background = bg; scene.environment = env; scene.overrideMaterial = null;
+  return best;
+}
+
 const out = [];
 for (const m of cfg.models) {
   log(`model ${m.name}: loading`);
@@ -91,13 +126,31 @@ for (const m of cfg.models) {
     // close-ups: the rest pose from four sides, then each clip at its worst frame (or its middle) from front and side
     const shots = { rest: {} };
     root.traverse(o => { if (o.isSkinnedMesh) o.skeleton.pose(); });
+    let headMap = null;
+    try { headMap = mapRig(root); } catch {}
+    let restHead = 0;
+    if (headMap?.head) { paintHead(root, headMap.head); restHead = headShare(root); }
     for (const [v, yaw] of Object.entries(VIEWS)) shots.rest[v] = shot(root, yaw, 0.08);
     shots.clips = {};
     const mixer = new THREE.AnimationMixer(root);
     for (const c of clips) {
       const r = audit.clips.find(x => x.clip === c.name);
       const t = r && r.status !== 'ok' ? r.worstTime : c.duration * 0.5;
-      const a = mixer.clipAction(c); a.play(); mixer.setTime(t);
+      const a = mixer.clipAction(c); a.play();
+      // head visibility over the clip: the worst sampled frame
+      if (restHead > 0) {
+        let worstVis = Infinity, worstT = 0;
+        for (let f = 0; f < 8; f++) { const tt = c.duration * f / 7 * 0.999; mixer.setTime(tt); const v = headShare(root) / restHead; if (v < worstVis) { worstVis = v; worstT = tt; } }
+        const r = audit.clips.find(x => x.clip === c.name);
+        if (r) {
+          r.headVisible = +worstVis.toFixed(2);
+          if (worstVis < (cfg.minHeadVisible || 0.25)) {
+            r.flags.push({ level: 'fail', type: 'head-hidden', time: +worstT.toFixed(2), msg: `head buried in the body: from the best of 6 angles only ${Math.round(worstVis * 100)}% of the head shows compared with the rest pose` });
+            r.status = 'fail'; audit.status = 'fail';
+          }
+        }
+      }
+      mixer.setTime(t);
       shots.clips[c.name] = { time: +t.toFixed(2), front: shot(root, 0, 0.08), side: shot(root, Math.PI / 2, 0.08), top: shot(root, 0.3, 1.2) };
       a.stop();
     }
