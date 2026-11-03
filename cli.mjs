@@ -28,6 +28,7 @@ function parseArgs(argv) {
     else if (k === '--frames') a.frames = +v();
     else if (k === '--size') a.size = +v();
     else if (k === '--no-open') a.open = false;
+    else if (k === '--demo') a.demo = true;
     else if (k === '--help' || k === '-h') a.help = true;
     else if (!k.startsWith('-')) a.model.push(k);
     else { console.error('unknown option ' + k); process.exit(2); }
@@ -36,10 +37,16 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
+if (args.demo) {
+  // CC0 demo (Quaternius): a correct mannequin, one with its head skin moved onto the right upper arm, and 8 moves
+  args.model.push(path.join(HERE, 'demo/mannequin.glb'), path.join(HERE, 'demo/mannequin-broken.glb'));
+  args.anims.push(path.join(HERE, 'demo/moves.glb'));
+}
 if (args.help || !args.model.length) {
   console.log(`rigcheck: find broken skinning and impossible poses in rigged three.js characters
 
   npx rigcheck --model zombie.glb [--model b.glb] [--anims moves.glb] [--clips walk,run] [--out dir]
+  npx rigcheck --demo           try it on a correct and a deliberately broken mannequin (CC0)
 
   --model, -m   a GLB/GLTF character (rigged). Repeat for several. Its own animations are checked.
   --anims, -a   a GLB with animation clips on a humanoid skeleton (e.g. Mixamo); every clip is moved onto every model.

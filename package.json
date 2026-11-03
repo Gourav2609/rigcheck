@@ -1,6 +1,6 @@
 {
   "name": "rigcheck",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Find broken skinning, impossible poses and missing body parts in rigged three.js characters, with close-ups for a human or AI reviewer.",
   "type": "module",
   "bin": {
@@ -14,6 +14,8 @@
     "cli.mjs",
     "web",
     "skill",
+    "demo/*.glb",
+    "demo/LICENSE-Quaternius-UAL.txt",
     "README.md",
     "LICENSE"
   ],

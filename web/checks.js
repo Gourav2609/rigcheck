@@ -141,7 +141,8 @@ export function auditCharacter(root, clips, opts = {}) {
   });
   const headChestRest = map?.chest && map.head ? map.head.getWorldPosition(_v).distanceTo(map.chest.getWorldPosition(_w)) : 0;
   const boneRest = new Map();
-  if (map) for (const [, b] of Object.entries(map)) if (b?.isBone && b.parent?.isBone) {
+  // the hips are meant to move: their 'bone' up to a root at the floor changes length whenever the body crouches or jumps
+  if (map) for (const [, b] of Object.entries(map)) if (b?.isBone && b.parent?.isBone && b !== map.hips) {
     const d = b.getWorldPosition(_v).distanceTo(b.parent.getWorldPosition(_w));
     if (d > L.minBone * height) boneRest.set(b, d);
   }

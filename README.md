@@ -1,8 +1,17 @@
 # rigcheck
 
-Find broken skinning, smeared heads, missing body parts and impossible poses in rigged three.js characters, before
-your players do. Built for the "I moved Mixamo animations onto a model from the internet and something looks off"
-problem.
+![rigcheck catching a smeared zombie head, then the stretch heatmap](docs/rigcheck.gif)
+
+**Plays every animation on your rigged three.js character and tells you which ones tear, smear or lose the head, with
+close-ups to prove it.** Built for the "I moved Mixamo animations onto a model from the internet and something looks
+off" problem.
+
+```bash
+npx rigcheck --demo
+```
+
+The demo checks two copies of a free mannequin (CC0, Quaternius): a correct one, which passes, and one with its head
+and left forearm skinned to the wrong bones, which fails with close-ups. Then try your own files:
 
 ```bash
 npx rigcheck --model zombie.glb --anims mixamo-moves.glb
@@ -23,7 +32,7 @@ Every number is a measurement, not a guess:
 | **Head visible** | head vertices painted red, cameras aimed at the head from 6 sides, red pixels vs the rest pose | heads swallowed by shoulder or chest skin even when the bones look fine |
 | **Head below the shoulders** | head joint vs shoulder line, upright clips only | necks folding into the chest |
 | **Neck bend** | angle between chest→neck and neck→head | heads snapped forward or back |
-| **Bone length** | distance to the parent bone vs rest | retargets that scale bones |
+| **Bone length** | distance to the parent bone vs rest (not the hips, which are meant to move) | retargets that scale bones |
 | **See-through body** | share of triangles on alpha-blended materials | dark or missing faces from wrong sorting |
 | **Missing textures** | materials without a colour texture while others have one | textures lost on export |
 | **NaN** | non-finite vertex positions | broken transforms |
@@ -44,6 +53,7 @@ Mixamo, Maya, 3ds Max, Rigify and home-made humanoid rigs, including twist bones
 --frames      frames sampled per clip (default 12)
 --size        close-up size in pixels (default 384)
 --out, -o     report folder (default rigcheck-report)
+--demo        add the built-in demo: a correct and a broken mannequin plus 8 moves (CC0, Quaternius)
 --no-open     print the URL instead of opening a browser (e.g. to drive it with Playwright)
 ```
 
@@ -76,4 +86,6 @@ seeing your notes, so it doesn't share your blind spots. Copy the `skill` folder
 
 ## Licence
 
-MIT
+MIT. The demo files in `demo/` are from Quaternius' Universal Animation Library (CC0). The zombies in the GIF
+are free CGTrader models (dremorn and others) with Mixamo moves; they are shown as renders only and are not in this
+repo or the npm package.
