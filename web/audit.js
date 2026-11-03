@@ -71,8 +71,10 @@ function paintHead(root, headBone) {
     o.userData.rigcheckColor = o.geometry.getAttribute('color') || null;
   });
 }
-const MASK_VIEWS = [[0, 0.1], [Math.PI / 2, 0.1], [Math.PI, 0.1], [-Math.PI / 2, 0.1], [0.3, 1.2], [0, -0.6]];
-function headShare(root) {
+// cameras aim at the head bone from a fixed distance (not fitted to the body), so a lying body that fills the frame
+// doesn't shrink the head's share: we count head pixels against the same views at rest
+const MASK_DIRS = [[0, 0.15], [Math.PI / 2, 0.15], [Math.PI, 0.15], [-Math.PI / 2, 0.15], [0.3, 1.2], [0.2, -0.9]];
+function headPixels(root, headBone, height) {
   const bg = scene.background, env = scene.environment;
   const swap = mask => root.traverse(o => {
     if (!o.isSkinnedMesh || !o.userData.rigcheckMask) return;
@@ -82,26 +84,30 @@ function headShare(root) {
   });
   swap(true);
   scene.background = new THREE.Color(0x0000ff); scene.environment = null; scene.overrideMaterial = maskMat;
-  let best = 0;
-  for (const [yaw, pitch] of MASK_VIEWS) {
-    root.updateMatrixWorld(true); fit(root, yaw, pitch);
+  root.updateMatrixWorld(true);
+  const h = headBone.getWorldPosition(new THREE.Vector3()), d = height * 1.1;
+  const counts = [];
+  for (const [yaw, pitch] of MASK_DIRS) {
+    camera.position.set(h.x + Math.sin(yaw) * Math.cos(pitch) * d, h.y + Math.sin(pitch) * d, h.z + Math.cos(yaw) * Math.cos(pitch) * d);
+    camera.lookAt(h);
     renderer.setRenderTarget(maskTarget); renderer.render(scene, camera);
     renderer.readRenderTargetPixels(maskTarget, 0, 0, 128, 128, maskPixels);
-    let head = 0, body = 0;
-    for (let i = 0; i < maskPixels.length; i += 4) { if (maskPixels[i + 2] > 128 && maskPixels[i] < 100) continue; body++; if (maskPixels[i] > 128) head++; }
-    if (body) best = Math.max(best, head / body);
+    let head = 0;
+    for (let i = 0; i < maskPixels.length; i += 4) if (maskPixels[i] > 128 && maskPixels[i + 2] < 100) head++;
+    counts.push(head);
   }
   renderer.setRenderTarget(null);
   scene.background = bg; scene.environment = env; scene.overrideMaterial = null;
   swap(false);
-  return best;
+  return Math.max(...counts);
 }
-
 const out = [];
 for (const m of cfg.models) {
   log(`model ${m.name}: loading`);
   try {
     const g = await loader.loadAsync(m.url);
+    // three.js culls skinned meshes by their bind-pose bounds: a body lying on the floor can vanish from a camera aimed at it
+    g.scene.traverse(o => { if (o.isMesh) o.frustumCulled = false; });
     let root = g.scene, clips = [...g.animations], prep = null;
     const origin = new Map(); // retargeted clip name -> { lib, clip } it came from
     if (libs.length) {
@@ -139,7 +145,7 @@ for (const m of cfg.models) {
     let headMap = null;
     try { headMap = mapRig(root); } catch {}
     let restHead = 0;
-    if (headMap?.head) { paintHead(root, headMap.head); restHead = headShare(root); }
+    if (headMap?.head) { paintHead(root, headMap.head); restHead = headPixels(root, headMap.head, audit.height); }
     for (const [v, yaw] of Object.entries(VIEWS)) shots.rest[v] = shot(root, yaw, 0.08);
     shots.clips = {};
     const mixer = new THREE.AnimationMixer(root);
@@ -150,12 +156,12 @@ for (const m of cfg.models) {
       // head visibility over the clip: the worst sampled frame
       if (restHead > 0) {
         let worstVis = Infinity, worstT = 0;
-        for (let f = 0; f < 8; f++) { const tt = c.duration * f / 7 * 0.999; mixer.setTime(tt); const v = headShare(root) / restHead; if (v < worstVis) { worstVis = v; worstT = tt; } }
+        for (let f = 0; f < 8; f++) { const tt = c.duration * f / 7 * 0.999; mixer.setTime(tt); const v = Math.min(1, headPixels(root, headMap.head, audit.height) / restHead); if (v < worstVis) { worstVis = v; worstT = tt; } }
         const r = audit.clips.find(x => x.clip === c.name);
         if (r) {
           r.headVisible = +worstVis.toFixed(2);
           if (worstVis < (cfg.minHeadVisible || 0.25)) {
-            r.flags.push({ level: 'fail', type: 'head-hidden', time: +worstT.toFixed(2), msg: `head buried in the body: from the best of 6 angles only ${Math.round(worstVis * 100)}% of the head shows compared with the rest pose` });
+            r.flags.push({ level: 'fail', type: 'head-hidden', time: +worstT.toFixed(2), msg: `head buried in the body: seen from the best of 6 angles around it, only ${Math.round(worstVis * 100)}% of the head shows compared with the rest pose` });
             r.status = 'fail'; audit.status = 'fail';
           }
         }

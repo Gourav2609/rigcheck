@@ -256,3 +256,43 @@ export function compareToSource(src, srcClip, dst, dstClip, frames = 12) {
   if (hipsMax > 0 && hipsMin < hipsMax * 0.5) return { skipped: 'big root motion (falls to or rises from the floor)' };
   return { maxDrift: Math.round(worst), spineDrift: Math.round(spine), segment: worstSeg, time: +worstTime.toFixed(2) };
 }
+
+/**
+ * Colour a skinned mesh by how much it stretches in its current pose, for heatmap pictures: blue = up to 1.8x (normal joint
+ * stretch), yellow = 2.4x, red = 3x or more (the fail level) (or crushed below 0.33x). Call prepareHeat once (at the rest pose), then
+ * heat(state) after posing; it writes a 'color' attribute (use a material with vertexColors: true).
+ */
+export function prepareHeat(mesh) {
+  mesh.updateMatrixWorld(true);
+  const n = mesh.geometry.attributes.position.count, edges = edgesOf(mesh);
+  const rest = positions(mesh, new Float32Array(n * 3)), restLen = new Float32Array(edges.length / 2);
+  for (let i = 0; i < restLen.length; i++) restLen[i] = len(rest, edges[i * 2], edges[i * 2 + 1]);
+  const color = new THREE.BufferAttribute(new Float32Array(n * 3), 3);
+  return { mesh, n, edges, restLen, cur: new Float32Array(n * 3), worst: new Float32Array(n), color };
+}
+// red = the fail level (3x); everyday joint stretch up to 1.8x stays blue
+const _c = new THREE.Color(), STOPS = [[1, 0x2a6cf0], [1.8, 0x2a6cf0], [2.4, 0xf2d03b], [3, 0xf2443b]];
+export function heat(state) {
+  const { mesh, n, edges, restLen, cur, worst, color } = state;
+  mesh.updateMatrixWorld(true);
+  positions(mesh, cur);
+  worst.fill(1);
+  for (let i = 0; i < restLen.length; i++) {
+    if (restLen[i] < 1e-6) continue;
+    const a = edges[i * 2], b = edges[i * 2 + 1];
+    let k = len(cur, a, b) / restLen[i];
+    if (k < 1) k = 1 / Math.max(k, 1e-3); // crushing counts like stretching
+    if (k > worst[a]) worst[a] = k;
+    if (k > worst[b]) worst[b] = k;
+  }
+  for (let i = 0; i < n; i++) {
+    const k = worst[i];
+    let j = 0; while (j < STOPS.length - 2 && k > STOPS[j + 1][0]) j++;
+    const [k0, c0] = STOPS[j], [k1, c1] = STOPS[j + 1];
+    _c.setHex(c0).lerp(new THREE.Color(c1), THREE.MathUtils.clamp((k - k0) / (k1 - k0), 0, 1));
+    color.setXYZ(i, _c.r, _c.g, _c.b);
+  }
+  color.needsUpdate = true;
+  if (mesh.geometry.getAttribute('color') !== color) mesh.geometry.setAttribute('color', color);
+  return state;
+}
