@@ -161,17 +161,17 @@ function writeReport(data, dir) {
       <div class="muted">${a.tris} triangles · ${a.meshes} skinned meshes · ${a.bones} bones · ${a.humanoid ? 'humanoid' : 'not humanoid'} · height ${a.height}</div>
       ${a.findings.map(f => `<p class="${f.level}">${esc(f.level.toUpperCase())}: ${esc(f.msg)}</p>`).join('')}
       <div class="row">${Object.entries(rest).map(([v, f]) => `<figure style="margin:0"><img src="${f}"><figcaption class="muted">rest · ${v}</figcaption></figure>`).join('')}</div>
-      <table><tr><th>clip</th><th>status</th><th>findings</th><th>stretch</th><th>front</th><th>side</th></tr>`;
+      <table><tr><th>clip</th><th>status</th><th>findings</th><th>stretch</th><th>front</th><th>side</th><th>top</th></tr>`;
     const sorted = [...a.clips].sort((x, y) => ({ fail: 0, warn: 1, ok: 2 }[x.status] - { fail: 0, warn: 1, ok: 2 }[y.status]));
     const clipsOut = [];
     for (const c of sorted) {
       const s = m.shots.clips[c.clip];
-      const front = s && save(s.front, `${m.name}__${c.clip}__front`), side = s && save(s.side, `${m.name}__${c.clip}__side`);
-      clipsOut.push({ ...c, shots: { time: s?.time, front, side } });
+      const front = s && save(s.front, `${m.name}__${c.clip}__front`), side = s && save(s.side, `${m.name}__${c.clip}__side`), top = s?.top && save(s.top, `${m.name}__${c.clip}__top`);
+      clipsOut.push({ ...c, shots: { time: s?.time, front, side, top } });
       html += `<tr><td><code>${esc(c.clip)}</code><div class="muted">${c.duration}s · shot at ${s?.time ?? '-'}s</div></td><td class="${c.status}">${c.status}</td>
         <td>${c.flags.map(f => `<div class="${f.level}">${esc(f.msg)} <span class="muted">@${f.time}s</span></div>`).join('') || '<span class="muted">-</span>'}</td>
-        <td>${c.maxStretch}x max<br><span class="muted">${c.worstBadPct}% edges</span></td>
-        <td>${front ? `<img src="${front}">` : ''}</td><td>${side ? `<img src="${side}">` : ''}</td></tr>`;
+        <td>${c.maxStretch}x max<br><span class="muted">${c.worstBadPct}% edges</span>${c.fidelity ? `<br><span class="muted">${c.fidelity.skipped ? 'source check skipped (floor move)' : `source drift ${c.fidelity.spineDrift}° spine, ${c.fidelity.maxDrift}° max`}</span>` : ''}</td>
+        <td>${front ? `<img src="${front}">` : ''}</td><td>${side ? `<img src="${side}">` : ''}</td><td>${top ? `<img src="${top}">` : ''}</td></tr>`;
     }
     html += `</table>`;
     json.models.push({ name: m.name, ...a, shots: { rest }, clips: clipsOut });

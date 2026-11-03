@@ -9,7 +9,7 @@
 // What it measures:
 //   - mesh stretch: every triangle edge, every sampled frame, against the bind pose. Broken skin weights and bad
 //     retargets show up as edges many times longer (or shorter) than they should be.
-//   - pose sanity for humanoids: head below the shoulders, necks bent past what a body can do,
+//   - pose sanity for humanoids: head sinking into the chest, head below the shoulders, necks bent past what a body can do,
 //     bones that change length (a retarget scaling something it shouldn't), NaN transforms.
 //   - parts with nothing attached: key bones (head, hands, feet) that no vertex follows, usually a missing mesh piece.
 import * as THREE from 'three';
@@ -30,6 +30,8 @@ export const LIMITS = {
   neckBend: 80,        // degrees between chest->neck and neck->head
   boneLength: 0.08,    // a bone changing length by more than 8% between frames
   minBone: 0.02,       // ignore bones shorter than this fraction of height (a pelvis sitting on its root)
+  fold: 100,          // degrees between hips->chest and chest->head: past this the upper body folds over and the head ends up inside it
+  headSink: 0.6,       // head joint closer to the chest than 60% of its rest distance: the head is sinking into the body
   headDrop: 0.15,      // head below the shoulder line by more than 15% of body height (zombies hunch on purpose)
 };
 // clips where lying, crawling or falling is the point: pose checks that assume an upright body are skipped
@@ -137,6 +139,7 @@ export function auditCharacter(root, clips, opts = {}) {
     for (let i = 0; i < restLen.length; i++) restLen[i] = len(rest, edges[i * 2], edges[i * 2 + 1]);
     return { m, edges, restLen, cur: new Float32Array(n * 3) };
   });
+  const headChestRest = map?.chest && map.head ? map.head.getWorldPosition(_v).distanceTo(map.chest.getWorldPosition(_w)) : 0;
   const boneRest = new Map();
   if (map) for (const [, b] of Object.entries(map)) if (b?.isBone && b.parent?.isBone) {
     const d = b.getWorldPosition(_v).distanceTo(b.parent.getWorldPosition(_w));
@@ -179,6 +182,16 @@ export function auditCharacter(root, clips, opts = {}) {
         const head = map.head.getWorldPosition(_v).clone();
         const sh = Math.max(map.upperArmL ? map.upperArmL.getWorldPosition(_w).y : -Infinity, map.upperArmR ? map.upperArmR.getWorldPosition(_w).y : -Infinity);
         if (!low && Number.isFinite(sh) && head.y < sh - L.headDrop * height) flag('head-drop', t, `head drops below the shoulders (${((sh - head.y) / height * 100).toFixed(0)}% of height)`);
+        if (map.hips && map.chest) {
+          const a = map.chest.getWorldPosition(_p).sub(map.hips.getWorldPosition(_q));
+          const b = map.head.getWorldPosition(_w).sub(map.chest.getWorldPosition(_q));
+          const deg = THREE.MathUtils.radToDeg(a.angleTo(b));
+          if (deg > L.fold) flag('fold', t, `upper body folds over (${deg.toFixed(0)}° between spine and neck): the head ends up inside the body`, 'fail');
+        }
+        if (headChestRest > 0) {
+          const k = map.head.getWorldPosition(_p).distanceTo(map.chest.getWorldPosition(_q)) / headChestRest;
+          if (k < L.headSink) flag('head-sink', t, `head sinks into the chest: head-to-chest distance down to ${(k * 100).toFixed(0)}% of rest`, 'fail');
+        }
         const neckBase = (map.neck[0] || map.head.parent);
         if (map.chest && neckBase && neckBase !== map.chest) {
           const a = neckBase.getWorldPosition(_p).sub(map.chest.getWorldPosition(_q)).normalize();
@@ -207,4 +220,39 @@ export function auditCharacter(root, clips, opts = {}) {
   const status = st.findings.some(f => f.level === 'fail') || results.some(r => r.status === 'fail') ? 'fail'
     : st.findings.length || results.some(r => r.status === 'warn') ? 'warn' : 'ok';
   return { ...st, height: +height.toFixed(3), status, clips: results };
+}
+
+/**
+ * Did moving the clip onto this model keep the motion? Compares the direction of the main body segments (spine, neck,
+ * upper and lower arms and legs) on the source skeleton and on the model, frame by frame. A big difference means the
+ * retarget changed the motion; a small one means "the clip itself looks like that".
+ * src/dst: { root, map } (map from rig.js mapRig); srcClip/dstClip: the same clip for each.
+ */
+export function compareToSource(src, srcClip, dst, dstClip, frames = 12) {
+  const segs = [['hips', 'chest'], ['chest', 'head'], ['upperArmL', 'lowerArmL'], ['lowerArmL', 'handL'], ['upperArmR', 'lowerArmR'],
+    ['lowerArmR', 'handR'], ['upperLegL', 'lowerLegL'], ['lowerLegL', 'footL'], ['upperLegR', 'lowerLegR'], ['lowerLegR', 'footR']];
+  const ms = new THREE.AnimationMixer(src.root), md = new THREE.AnimationMixer(dst.root);
+  ms.clipAction(srcClip).play(); md.clipAction(dstClip).play();
+  let worst = 0, worstSeg = null, worstTime = 0, spine = 0;
+  const dir = (map, a, b) => map[b] && map[a] ? map[b].getWorldPosition(new THREE.Vector3()).sub(map[a].getWorldPosition(new THREE.Vector3())).normalize() : null;
+  let hipsMax = -Infinity, hipsMin = Infinity;
+  for (let f = 0; f < frames; f++) {
+    const t = (srcClip.duration * f) / Math.max(1, frames - 1) * 0.999;
+    ms.setTime(t); md.setTime(t);
+    src.root.updateMatrixWorld(true); dst.root.updateMatrixWorld(true);
+    const hy = src.map.hips.getWorldPosition(new THREE.Vector3()).y;
+    hipsMax = Math.max(hipsMax, hy);
+    hipsMin = Math.min(hipsMin, hy);
+    for (const [a, b] of segs) {
+      const u = dir(src.map, a, b), v = dir(dst.map, a, b);
+      if (!u || !v) continue;
+      const deg = THREE.MathUtils.radToDeg(u.angleTo(v));
+      if (deg > worst) { worst = deg; worstSeg = `${a}->${b}`; worstTime = t; }
+      if ((a === 'hips' || a === 'chest') && deg > spine) spine = deg;
+    }
+  }
+  ms.stopAllAction(); ms.uncacheRoot(src.root); md.stopAllAction(); md.uncacheRoot(dst.root);
+  // falls and stand-ups: the comparison isn't reliable yet when the body travels to or from the floor
+  if (hipsMax > 0 && hipsMin < hipsMax * 0.5) return { skipped: 'big root motion (falls to or rises from the floor)' };
+  return { maxDrift: Math.round(worst), spineDrift: Math.round(spine), segment: worstSeg, time: +worstTime.toFixed(2) };
 }

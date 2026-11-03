@@ -4,7 +4,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { prepare, retarget } from './rig.js';
-import { auditCharacter } from './checks.js';
+import { auditCharacter, compareToSource } from './checks.js';
+import { mapRig } from './rig.js';
 
 const logEl = document.getElementById('log');
 const log = s => { logEl.textContent += '\n' + s; console.log('[rigcheck]', s); };
@@ -56,19 +57,36 @@ for (const m of cfg.models) {
   log(`model ${m.name}: loading`);
   try {
     const g = await loader.loadAsync(m.url);
-    let root = g.scene, clips = [...g.animations];
+    let root = g.scene, clips = [...g.animations], prep = null;
+    const origin = new Map(); // retargeted clip name -> { lib, clip } it came from
     if (libs.length) {
-      const prep = prepare(g.scene);
+      prep = prepare(g.scene);
       root = prep.wrap;
       for (const lib of libs) for (const c of lib.clips) {
         if (want && !want.has(c.name)) continue;
-        try { clips.push(retarget(lib.src, prep, c, { name: c.name })); } catch (e) { log(`  could not move ${c.name}: ${e.message}`); }
+        try { clips.push(retarget(lib.src, prep, c, { name: c.name })); origin.set(c.name, { lib, clip: c }); } catch (e) { log(`  could not move ${c.name}: ${e.message}`); }
       }
     }
     if (want) clips = clips.filter(c => want.has(c.name));
     scene.add(root);
     const t0 = performance.now();
     const audit = auditCharacter(root, clips, { frames: cfg.frames || 12 });
+    // retarget fidelity: does the model move like the source skeleton did?
+    if (prep) {
+      const dmap = mapRig(root);
+      for (const r of audit.clips) {
+        const o = origin.get(r.clip);
+        if (!o) continue;
+        const c = clips.find(x => x.name === r.clip);
+        r.fidelity = compareToSource({ root: o.lib.src.model, map: o.lib.src.map }, o.clip, { root, map: dmap }, c, cfg.frames || 12);
+        // only spine and neck count for now: limb directions on clips with big root motion (falls) disagree on every model alike
+        if (!r.fidelity.skipped && r.fidelity.spineDrift > (cfg.maxDrift || 35)) {
+          r.flags.push({ level: 'warn', type: 'drift', time: r.fidelity.time, msg: `spine or neck moves differently from the source animation: off by ${r.fidelity.spineDrift}°` });
+          if (r.status === 'ok') r.status = 'warn';
+        }
+      }
+      if (audit.status === 'ok' && audit.clips.some(r => r.status !== 'ok')) audit.status = 'warn';
+    }
     log(`  ${clips.length} clips checked in ${((performance.now() - t0) / 1000).toFixed(1)} s: ${audit.status.toUpperCase()}`);
     // close-ups: the rest pose from four sides, then each clip at its worst frame (or its middle) from front and side
     const shots = { rest: {} };
@@ -80,7 +98,7 @@ for (const m of cfg.models) {
       const r = audit.clips.find(x => x.clip === c.name);
       const t = r && r.status !== 'ok' ? r.worstTime : c.duration * 0.5;
       const a = mixer.clipAction(c); a.play(); mixer.setTime(t);
-      shots.clips[c.name] = { time: +t.toFixed(2), front: shot(root, 0, 0.08), side: shot(root, Math.PI / 2, 0.08) };
+      shots.clips[c.name] = { time: +t.toFixed(2), front: shot(root, 0, 0.08), side: shot(root, Math.PI / 2, 0.08), top: shot(root, 0.3, 1.2) };
       a.stop();
     }
     mixer.uncacheRoot(root);

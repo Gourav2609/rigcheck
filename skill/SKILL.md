@@ -21,7 +21,7 @@ Numbers miss things that look wrong but aren't geometrically broken. Spawn a **s
 seen your notes or the numbers, and give it only:
 
 - the folder `rigcheck-report/shots/` (rest pose from four sides, and each clip at its worst frame, front and side,
-  all on a magenta background), and
+  all on a magenta background; clips also get a top-down shot), and
 - this checklist, to answer per character and per clip:
   1. **Head and face**: present, upright where it should be, not folded into the chest, not flattened, face not dark or blank.
   2. **Hands and feet**: present, sensible size, fingers not exploded, feet on the ground plane.
@@ -32,6 +32,8 @@ seen your notes or the numbers, and give it only:
 
 ## 3. Report
 
-Merge the numbers and the reviewer's findings into one list, most severe first, each with the close-up file and how to
+Before reporting a reviewer finding, check it against the numbers: e.g. "head missing" with a normal head-to-chest
+distance and low source drift usually means the head hangs face-down out of view (a readability issue, not a broken rig);
+look at the top-down shot. Merge the numbers and the reviewer's findings into one list, most severe first, each with the close-up file and how to
 reproduce (model + clip + time from report.json). Do not call a character fine because the numbers passed if the
 reviewer saw a problem, or the other way round: say which source found what.

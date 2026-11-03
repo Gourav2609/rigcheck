@@ -26,6 +26,7 @@ Every number is a measurement, not a guess:
 | **See-through body** | share of triangles on alpha-blended materials | dark or missing faces from wrong sorting |
 | **Missing textures** | materials without a colour texture while others have one | textures lost on export |
 | **NaN** | non-finite vertex positions | broken transforms |
+| **Matches the source** | for library clips: spine and neck direction on the source skeleton vs the model, frame by frame | retargets that change the motion, vs "the clip itself looks like that" |
 
 Thresholds were calibrated on real retargeted characters: models that look right never had more than 1.5% of edges
 past 3x in any clip; a broken one had 3–15%. Override any limit in code (`LIMITS` in `web/checks.js`).
@@ -63,6 +64,10 @@ seeing your notes, so it doesn't share your blind spots. Copy the `skill` folder
 
 - Humanoid checks need a head, two hands and two feet it can find; other rigs get the mesh checks only.
 - Knee and elbow direction checks are not in yet (rigs disagree about which way is forward).
+- "Matches the source" only judges spine and neck for now: on clips with big root motion (falls, stand-ups) limb
+  directions disagree with the source on every model alike, which points at the comparison, not the models.
+- The numbers can't tell "head hidden face-down in a deep hunch" from "head missing"; the top-down close-up and the
+  reviewer agent can, and the reviewer can over-call it too. Use both and check one against the other.
 - The close-ups need WebGL, so headless browsers without a GPU produce blank images; the numbers still work.
 
 ## Licence
