@@ -3,16 +3,46 @@
   "version": "0.1.0",
   "description": "Find broken skinning, impossible poses and missing body parts in rigged three.js characters, with close-ups for a human or AI reviewer.",
   "type": "module",
-  "bin": { "rigcheck": "./cli.mjs" },
+  "bin": {
+    "rigcheck": "./cli.mjs"
+  },
   "exports": {
     "./checks": "./web/checks.js",
     "./rig": "./web/rig.js"
   },
-  "files": ["cli.mjs", "web", "skill", "README.md", "LICENSE"],
+  "files": [
+    "cli.mjs",
+    "web",
+    "skill",
+    "README.md",
+    "LICENSE"
+  ],
   "license": "MIT",
-  "keywords": ["three", "threejs", "gltf", "rig", "skinning", "animation", "mixamo", "retarget", "qa", "playtest", "claude-code"],
+  "keywords": [
+    "three",
+    "threejs",
+    "gltf",
+    "rig",
+    "skinning",
+    "animation",
+    "mixamo",
+    "retarget",
+    "qa",
+    "playtest",
+    "claude-code"
+  ],
   "dependencies": {
     "three": ">=0.160.0"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gourav2609/rigcheck.git"
+  },
+  "homepage": "https://github.com/Gourav2609/rigcheck#readme",
+  "bugs": {
+    "url": "https://github.com/Gourav2609/rigcheck/issues"
+  }
 }
